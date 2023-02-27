@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:mc_server_status/models/mc_server.dart';
 import 'package:mc_server_status/models/mc_server_info.dart';
 import 'package:mc_server_status/widgets/mc_input.dart';
 
 import '../widgets/mc_button.dart';
 
-class AddServerPage extends StatelessWidget {
-  final TextEditingController nameController =
-      TextEditingController(text: "Minecraft Server");
-  final TextEditingController addressController = TextEditingController();
+class EditServerPage extends StatelessWidget {
+  final TextEditingController nameController;
+  final TextEditingController addressController;
 
-  AddServerPage({super.key});
+  EditServerPage({required MCServerInfo info, super.key})
+      : nameController = TextEditingController(text: info.displayName),
+        addressController = TextEditingController(text: info.address);
 
   @override
   Widget build(BuildContext context) {
@@ -58,8 +60,11 @@ class AddServerPage extends StatelessWidget {
                     MCButton(
                       text: "確認",
                       onPressed: () {
-                        Navigator.pop(context,
-                            [true, MCServerInfo(nameController.text.trim(), addressController.text.trim())]);
+                        Navigator.pop(context, [
+                          true,
+                          MCServerInfo(nameController.text.trim(),
+                              addressController.text.trim())
+                        ]);
                       },
                     ),
 

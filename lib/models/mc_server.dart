@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:mc_server_status/models/mc_server_info.dart';
 
 class MinecraftServer {
   static final _defaultIcon = Image.asset(
@@ -10,7 +11,7 @@ class MinecraftServer {
 
   String address = "a";
   bool online = false;
-  String name = "";
+  String displayName = "";
   String motd1 = "";
   String motd2 = "";
   int currPlayer = 0;
@@ -28,7 +29,7 @@ class MinecraftServer {
 
   MinecraftServer.loading() {
     online = false;
-    name = "Minecraft Server";
+    displayName = "Minecraft Server";
     motd1 = "Loading...";
     motd2 = "Loading...";
   }

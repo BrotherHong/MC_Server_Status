@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:mc_server_status/models/mc_server.dart';
+import 'package:mc_server_status/models/mc_server_info.dart';
 import 'package:mc_server_status/pages/add_server_page.dart';
 import 'package:mc_server_status/pages/confirm_page.dart';
+import 'package:mc_server_status/pages/edit_server_page.dart';
+import 'package:mc_server_status/utils/database_helper.dart';
 import 'package:mc_server_status/utils/network.dart';
 import 'package:mc_server_status/widgets/mc_button.dart';
 import 'package:mc_server_status/widgets/server_tile.dart';
@@ -14,32 +17,25 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static final List<List<String>> addresses = [];
+  static List<MCServerInfo> serverInfo = [];
 
-  int selectIndex = -1;
+  static Future<List<MinecraftServer>> getFutureServers() async {
+    serverInfo = await DatabaseHelper.instance.getServerInfo();
 
-  Future<List<MinecraftServer>> futureServers = getFutureServers(addresses);
-
-  static Future<List<MinecraftServer>> getFutureServers(
-      List<List<String>> address) async {
     List<MinecraftServer> servers = [];
 
-    for (int i = 0; i < address.length; i++) {
-      var server = await fetchServer(address[i][1]);
-      server.name = address[i][0];
-      server.address = address[i][1];
+    for (int i = 0; i < serverInfo.length; i++) {
+      var server = await fetchServer(serverInfo[i].address);
+      server.displayName = serverInfo[i].displayName;
+      server.address = serverInfo[i].address;
       servers.add(server);
     }
 
     return servers;
   }
 
-  void reloadList() {
-    setState(() {
-      futureServers = getFutureServers(addresses);
-      selectIndex = -1;
-    });
-  }
+  int selectIndex = -1;
+  Future<List<MinecraftServer>> futureServers = getFutureServers();
 
   @override
   Widget build(BuildContext context) {
@@ -81,19 +77,17 @@ class _HomePageState extends State<HomePage> {
                   future: futureServers,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return ListView.builder(
-                        itemCount: addresses.length,
-                        itemBuilder: (context, index) {
-                          return ServerTile(
-                            server: MinecraftServer.loading(),
-                            selected: false,
-                          );
-                        },
+                      return const Text(
+                        "Loading...",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 30,
+                        ),
                       );
-                    } else if (snapshot.connectionState == ConnectionState.done) {
+                    } else if (snapshot.connectionState ==
+                        ConnectionState.done) {
                       if (snapshot.hasData) {
                         var servers = snapshot.data!;
-
                         return buildServerList(servers);
                       }
 
@@ -129,7 +123,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: MCButton(
                             text: "編輯",
-                            onPressed: () {},
+                            onPressed: editServer,
                           ),
                         ),
 
@@ -148,22 +142,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: MCButton(
                             text: "新增伺服器",
-                            onPressed: () async {
-                              var data = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => AddServerPage(),
-                                ),
-                              );
-
-                              setState(() {
-                                if (data[0] && data[2] != "") {
-                                  addresses.add([data[1], data[2]]);
-                                  reloadList();
-                                }
-                                selectIndex = -1;
-                              });
-                            },
+                            onPressed: addServer,
                           ),
                         ),
 
@@ -171,26 +150,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: MCButton(
                             text: "刪除伺服器",
-                            onPressed: () async {
-                              if (selectIndex == -1) return;
-
-                              var confirm = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const ConfirmPage(),
-                                ),
-                              );
-
-                              setState(() {
-                                if (confirm != null &&
-                                    confirm is bool &&
-                                    confirm) {
-                                  addresses.removeAt(selectIndex);
-                                  reloadList();
-                                }
-                                selectIndex = -1;
-                              });
-                            },
+                            onPressed: deleteServer,
                           ),
                         ),
                       ],
@@ -205,18 +165,80 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void editServer() async {
+    if (selectIndex == -1) return;
+
+    // [confirm, MCServerInfo]
+    var data = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditServerPage(info: serverInfo[selectIndex]),
+      ),
+    );
+
+    bool confirm = data[0];
+
+    if (confirm) {
+      MCServerInfo newInfo = data[1];
+      if (newInfo.address == "") return;
+      await DatabaseHelper.instance.updateServerInfo(serverInfo[selectIndex].id!, newInfo);
+      reloadList();
+    }
+  }
+
+  void reloadList() {
+    setState(() {
+      futureServers = getFutureServers();
+      selectIndex = -1;
+    });
+  }
+
+  void addServer() async {
+    // [confirm, MCServerInfo]
+    var data = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddServerPage(),
+      ),
+    );
+
+    bool confirm = data[0];
+
+    if (confirm) {
+      MCServerInfo info = data[1];
+      if (info.address == "") return;
+
+      await DatabaseHelper.instance.addServerInfo(info);
+      reloadList();
+    }
+  }
+
+  void deleteServer() async {
+    if (selectIndex == -1) return;
+
+    bool confirm = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ConfirmPage(),
+      ),
+    );
+
+    if (confirm) {
+      await DatabaseHelper.instance.removeServerInfo(serverInfo[selectIndex].id!);
+      reloadList();
+    }
+  }
+
   ListView buildServerList(List<MinecraftServer> servers) {
     return ListView.builder(
       itemCount: servers.length,
       itemBuilder: (context, index) {
-        return GestureDetector(
+        return ServerTile(
+          server: servers[index],
+          selected: (index == selectIndex),
           onTap: () => setState(() {
             selectIndex = index;
           }),
-          child: ServerTile(
-            server: servers[index],
-            selected: (index == selectIndex),
-          ),
         );
       },
     );
